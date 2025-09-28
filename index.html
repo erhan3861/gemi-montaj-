@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Neon Gemi Montajı Oyunu - Zorlu Seviye</title>
+<style>
+:root{
+    --bg:#0b0f26; --panel:#141a3f; --panel2:#192159; --ink:#eef0ff; --muted:#a9add6;
+    --accent:#6c5dd3; --gold:#ffde59; --good:#2ecc71; --danger:#e74c3c;
+    --ship-color: #59a1ff; /* Ana gemi rengi */
+    --ship-glow: 0 0 12px var(--ship-color);
+}
+*{box-sizing:border-box;user-select:none}
+html,body{
+    height:100%;margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    overflow:hidden;
+}
+#game-container{
+    position:relative;
+    width: 100vw;
+    height: 100vh;
+    background:radial-gradient(circle,var(--panel),var(--bg));
+    border: none;
+    border-radius: 0;
+    box-shadow: inset 0 0 25px rgba(0,0,0,.6);
+    overflow:hidden;
+    display:flex;flex-direction:column;
+}
+.ui-bar{
+    padding:10px 15px;
+    background:rgba(0,0,0,.3);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-shrink:0;
+    border-bottom:2px solid rgba(108,93,211,.3);
+    gap: 15px;
+}
+.ui-left-group, .ui-right-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.ui-right-group {
+    gap: 10px;
+}
+.stats {
+    display: flex;
+    gap: 20px;
+    font-size:clamp(1.2rem, 3vw, 1.6rem);
+    font-weight:700;
+}
+.btn{
+    background:linear-gradient(180deg,var(--accent),#4e42c2);
+    border:1px solid rgba(255,255,255,.15); color:#fff; padding:8px 12px;
+    border-radius:10px; cursor:pointer; font-weight:700; font-size:.9rem;
+    box-shadow:0 5px 15px rgba(0,0,0,.3); transition:transform .1s, box-shadow .2s;
+    display:flex; align-items:center; gap:8px;
+}
+.btn:hover{box-shadow:0 8px 20px rgba(0,0,0,.4); transform:translateY(-1px)}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:linear-gradient(180deg,#2b2f55,#1d2147)}
+.btn.good{background:linear-gradient(180deg,var(--good),#177845)}
+.icon img{width:20px;height:20px;display:block}
+.info-panel {
+    text-align: center;
+    padding: 6px 12px;
+    background: rgba(0,0,0,0.2);
+    color: var(--gold);
+    font-weight: 700;
+    font-size: 1rem;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 5px 10px rgba(0,0,0,.2);
+    margin: 0 auto 10px auto;
+    width: max-content;
+    flex-shrink: 0;
+    text-shadow: 0 0 5px rgba(255,222,89,.5);
+}
+#game-area {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(30px, 5vw, 60px);
+    padding: clamp(10px, 2vw, 20px);
+    min-height: 0;
+}
+#ship-outline {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    max-width: 600px; /* Daha büyük gemi */
+    max-height: 600px;
+    aspect-ratio: 1/1;
+    grid-template-columns: repeat(6, 1fr); /* Daha fazla grid alanı */
+    grid-template-rows: repeat(6, 1fr);
+    grid-template-areas: 
+        ". nose nose nose . ."
+        "wing-l-tip cockpit cockpit cockpit wing-r-tip ."
+        "wing-l-mid body-t body-t body-t wing-r-mid ."
+        "wing-l-base body-b body-b body-b wing-r-base ."
+        ". engine-l engine-c engine-r tail-fin ."
+        ". . . . . ."; /* Alt boşluk, ekstra parçalar için */
+    position: relative;
+}
+#parts-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px; /* Parçalar arası boşluk azaldı */
+    width: 250px; /* Daha geniş parça alanı */
+    height: 100%;
+    max-height: 600px;
+    padding: 20px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    flex-wrap: wrap; /* Parçalar sığmazsa alt satıra geçsin */
+}
+.part-slot {
+    border: 3px dashed var(--panel2);
+    border-radius: 8px;
+    margin: 2px;
+    transition: background-color 0.2s, border-color 0.2s;
+    display: flex; /* İçindeki parçayı ortalamak için */
+    align-items: center;
+    justify-content: center;
+}
+.part-slot.over {
+    border-color: var(--gold);
+    background-color: rgba(255,222,89,0.1);
+}
+.part-slot.filled {
+    border-color: var(--ship-color);
+    background-color: rgba(89, 161, 255, 0.1);
+    box-shadow: inset var(--ship-glow);
+}
+.part-slot.shake {
+    animation: shake 0.4s;
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+}
+
+/* Grid Alan Atamaları - Daha detaylı */
+.part-slot[data-part="nose"] { grid-area: nose; border-radius: 100% 100% 0 0 / 100% 100% 0 0; }
+.part-slot[data-part="cockpit"] { grid-area: cockpit; border-radius: 12px; }
+.part-slot[data-part="body-t"] { grid-area: body-t; border-radius: 8px; }
+.part-slot[data-part="body-b"] { grid-area: body-b; border-radius: 8px; }
+.part-slot[data-part="wing-l-tip"] { grid-area: wing-l-tip; border-radius: 8px 0 0 8px;}
+.part-slot[data-part="wing-l-mid"] { grid-area: wing-l-mid; border-radius: 8px 0 0 8px;}
+.part-slot[data-part="wing-l-base"] { grid-area: wing-l-base; border-radius: 8px 0 0 8px;}
+.part-slot[data-part="wing-r-tip"] { grid-area: wing-r-tip; border-radius: 0 8px 8px 0;}
+.part-slot[data-part="wing-r-mid"] { grid-area: wing-r-mid; border-radius: 0 8px 8px 0;}
+.part-slot[data-part="wing-r-base"] { grid-area: wing-r-base; border-radius: 0 8px 8px 0;}
+.part-slot[data-part="engine-l"] { grid-area: engine-l; border-radius: 8px; }
+.part-slot[data-part="engine-c"] { grid-area: engine-c; border-radius: 8px; }
+.part-slot[data-part="engine-r"] { grid-area: engine-r; border-radius: 8px; }
+.part-slot[data-part="tail-fin"] { grid-area: tail-fin; border-radius: 0 0 100% 100% / 0 0 50% 50%; } /* Özel şekil */
+
+
+/* Parça Stilleri - Daha fazla çeşitlilik ve boyut */
+.ship-part {
+    position: relative;
+    cursor: grab;
+    transition: opacity 0.2s, transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ship-color);
+    font-weight: bold;
+    font-size: 0.8em;
+    padding: 5px;
+    background: rgba(var(--ship-color-rgb), 0.2); /* Dinamik renk */
+    box-shadow: var(--ship-glow);
+}
+.ship-part.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+    transform: scale(1.05);
+}
+.ship-part.placed {
+    display: none; /* Yerleşince gizle */
+}
+
+/* Her parçanın kendi boyut ve şekil stili */
+.part-nose { width: 90%; height: 90%; border-radius: 100% 100% 0 0 / 100% 100% 0 0; background-color: var(--ship-color); }
+.part-cockpit { width: 90%; height: 90%; border-radius: 12px; background-color: var(--ship-color); }
+.part-body-t { width: 95%; height: 95%; border-radius: 8px; background-color: var(--ship-color); }
+.part-body-b { width: 95%; height: 95%; border-radius: 8px; background-color: var(--ship-color); }
+.part-wing-l-tip { width: 95%; height: 95%; border-radius: 8px 0 0 8px; background-color: var(--ship-color); }
+.part-wing-l-mid { width: 95%; height: 95%; border-radius: 8px 0 0 8px; background-color: var(--ship-color); }
+.part-wing-l-base { width: 95%; height: 95%; border-radius: 8px 0 0 8px; background-color: var(--ship-color); }
+.part-wing-r-tip { width: 95%; height: 95%; border-radius: 0 8px 8px 0; background-color: var(--ship-color); }
+.part-wing-r-mid { width: 95%; height: 95%; border-radius: 0 8px 8px 0; background-color: var(--ship-color); }
+.part-wing-r-base { width: 95%; height: 95%; border-radius: 0 8px 8px 0; background-color: var(--ship-color); }
+.part-engine-l, .part-engine-c, .part-engine-r { width: 90%; height: 90%; border-radius: 8px; background-color: var(--danger); box-shadow: 0 0 10px var(--danger); }
+.part-tail-fin { width: 80%; height: 80%; border-radius: 0 0 100% 100% / 0 0 50% 50%; background-color: var(--ship-color); }
+
+
+.modal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(11,15,38,.7); backdrop-filter:blur(8px); z-index:1000}
+.modal.active{display:flex}
+.modal-content{
+    position: relative;
+    background:linear-gradient(160deg,var(--panel),var(--panel2));
+    border:1px solid var(--accent); padding:30px 40px; border-radius:16px;
+    max-width:520px; width:90%; text-align:center; box-shadow:0 10px 50px rgba(0,0,0,.5);
+}
+.modal-content h2{margin:0 0 10px;font-size:2rem;color:var(--gold)}
+.modal-content p{color:var(--muted);font-size:1.05rem; line-height: 1.6;}
+.pass-box{
+    display:flex; gap:12px; align-items:center; justify-content:center; margin:20px 0;
+    background:rgba(0,0,0,.3); padding:10px 12px; border-radius:12px;
+}
+.pass{font-size:1.15rem;font-weight:900;color:var(--gold);letter-spacing:2px;text-shadow:0 0 8px var(--gold)}
+.close-modal-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+.close-modal-btn:hover {
+    color: var(--ink);
+    transform: scale(1.1);
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="ui-bar">
+        <div class="ui-left-group">
+             <div class="stats">
+                <div id="moves-display">Hamle: 0</div>
+            </div>
+        </div>
+        <div class="ui-right-group">
+            <button class="btn good" id="start-btn">YENİDEN BAŞLA</button>
+            <button id="ui-fullscreen-btn" class="btn ghost" title="Tam Ekran Modu">
+                <span class="icon">
+                    <img id="icon-expand" src="https://raw.githubusercontent.com/erhan3861/Maze-oyunu/main/maximize.png" alt="Tam Ekran Yap"/>
+                    <img id="icon-compress" src="https://raw.githubusercontent.com/erhan3861/Maze-oyunu/main/minimize.png" alt="Tam Ekrandan Çık" style="display:none;"/>
+                </span>
+            </button>
+        </div>
+    </div>
+    <div class="info-panel">
+       Gemi parçalarını sağdaki hangardan alıp soldaki şemaya doğru şekilde monte edin.
+    </div>
+    <div id="game-area">
+        <div id="ship-outline"></div>
+        <div id="parts-container"></div>
+    </div>
+</div>
+
+<div id="start-modal" class="modal active">
+    <div class="modal-content">
+        <button id="close-start-modal-btn" class="close-modal-btn" title="Kapat">&times;</button>
+        <h2>Neon Gemi Montajı</h2>
+        <p>Dağınık haldeki gemi parçalarını doğru yerlerine sürükleyerek uzay gemisini uçuşa hazır hale getir!</p>
+        <p style="color:var(--gold); font-weight:bold;">Bu sefer parça sayısı ve zorluk seviyesi daha yüksek!</p>
+        <button id="start-btn-2" class="btn good" style="margin-top: 15px; padding: 12px 20px; font-size: 1rem;">MONTAJA BAŞLA</button>
+    </div>
+</div>
+
+<div id="end-modal" class="modal">
+    <div class="modal-content">
+        <button id="close-end-modal-btn" class="close-modal-btn" title="Kapat">&times;</button>
+        <h2 id="end-title">🎉 Montaj Tamamlandı!</h2>
+        <p id="end-score">Gemiyi 0 hamlede başarıyla monte ettin.</p>
+        <div id="password-section" style="display:none;">
+            <p>Bölüm şifreniz:</p>
+            <div class="pass-box">
+                <span id="password" class="pass">—</span>
+                <button id="copy-btn" class="btn">Kopyala</button>
+            </div>
+        </div>
+        <p style="color:var(--muted); font-size: 0.9rem; margin-top: 15px;">Yeni bir gemi için <b>YENİDEN BAŞLA</b> butonunu kullan.</p>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+const startModal = document.getElementById('start-modal');
+const endModal = document.getElementById('end-modal');
+const startBtn = document.getElementById('start-btn');
+const startBtn2 = document.getElementById('start-btn-2');
+const closeStartModalBtn = document.getElementById('close-start-modal-btn');
+const closeEndModalBtn = document.getElementById('close-end-modal-btn');
+
+const movesDisplay = document.getElementById('moves-display');
+const endScore = document.getElementById('end-score');
+const passwordSection = document.getElementById('password-section');
+const passwordDisplay = document.getElementById('password');
+const copyBtn = document.getElementById('copy-btn');
+const uiFullscreenBtn = document.getElementById('ui-fullscreen-btn');
+const iconExpand = document.getElementById('icon-expand');
+const iconCompress = document.getElementById('icon-compress');
+const shipOutline = document.getElementById('ship-outline');
+const partsContainer = document.getElementById('parts-container');
+
+const PASSWORD_KEY = 'NEON-STARSHIP-ENGINEER-2025';
+
+// Geliştirilmiş parçalar listesi
+const PARTS = [
+    { id: 'nose', name: 'Burun', class: 'part-nose' },
+    { id: 'cockpit', name: 'Kokpit', class: 'part-cockpit' },
+    { id: 'body-t', name: 'Üst Gövde', class: 'part-body-t' },
+    { id: 'body-b', name: 'Alt Gövde', class: 'part-body-b' },
+    { id: 'wing-l-tip', name: 'Sol Ön Kanat', class: 'part-wing-l-tip' },
+    { id: 'wing-l-mid', name: 'Sol Orta Kanat', class: 'part-wing-l-mid' },
+    { id: 'wing-l-base', name: 'Sol Arka Kanat', class: 'part-wing-l-base' },
+    { id: 'wing-r-tip', name: 'Sağ Ön Kanat', class: 'part-wing-r-tip' },
+    { id: 'wing-r-mid', name: 'Sağ Orta Kanat', class: 'part-wing-r-mid' },
+    { id: 'wing-r-base', name: 'Sağ Arka Kanat', class: 'part-wing-r-base' },
+    { id: 'engine-l', name: 'Sol Motor', class: 'part-engine-l' },
+    { id: 'engine-c', name: 'Orta Motor', class: 'part-engine-c' },
+    { id: 'engine-r', name: 'Sağ Motor', class: 'part-engine-r' },
+    { id: 'tail-fin', name: 'Kuyruk Kanadı', class: 'part-tail-fin' }
+];
+
+let moves = 0;
+let correctPartsCount = 0; // "correctParts" yerine daha açıklayıcı bir isim
+let totalParts = PARTS.length;
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function createShipGame() {
+    shipOutline.innerHTML = '';
+    partsContainer.innerHTML = '';
+    moves = 0;
+    correctPartsCount = 0;
+    movesDisplay.textContent = `Hamle: ${moves}`;
+
+    const shuffledParts = shuffle([...PARTS]);
+
+    PARTS.forEach(part => {
+        const slot = document.createElement('div');
+        slot.classList.add('part-slot');
+        slot.dataset.part = part.id;
+        // Opsiyonel: Slot içine parçanın gölgeli halini ekleyebiliriz
+        // slot.innerHTML = `<div class="${part.class}" style="opacity:0.1; box-shadow:none;"></div>`;
+        shipOutline.appendChild(slot);
+        
+        slot.addEventListener('dragover', handleDragOver);
+        slot.addEventListener('dragleave', handleDragLeave);
+        slot.addEventListener('drop', handleDrop);
+    });
+
+    shuffledParts.forEach((part, index) => {
+        const partElement = document.createElement('div');
+        partElement.classList.add('ship-part', part.class);
+        partElement.id = `draggable-part-${part.id}`; // Her parçaya benzersiz id
+        partElement.dataset.part = part.id;
+        partElement.draggable = true;
+        partElement.textContent = part.name; // Parça adı gösterimi
+        partsContainer.appendChild(partElement);
+
+        partElement.addEventListener('dragstart', handleDragStart);
+        partElement.addEventListener('dragend', handleDragEnd);
+    });
+}
+
+function handleDragStart(e) {
+    e.dataTransfer.setData('partId', e.currentTarget.id);
+    e.dataTransfer.setData('partType', e.currentTarget.dataset.part);
+    setTimeout(() => e.currentTarget.classList.add('dragging'), 0);
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    const targetSlot = e.currentTarget;
+    if (targetSlot.classList.contains('part-slot') && !targetSlot.classList.contains('filled')) {
+        targetSlot.classList.add('over');
+    }
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('over');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    const targetSlot = e.currentTarget;
+    targetSlot.classList.remove('over');
+
+    if (targetSlot.classList.contains('filled')) return; // Zaten doluysa bir şey yapma
+
+    const partId = e.dataTransfer.getData('partId');
+    const partType = e.dataTransfer.getData('partType');
+    const draggablePart = document.getElementById(partId);
+
+    moves++;
+    movesDisplay.textContent = `Hamle: ${moves}`;
+
+    if (targetSlot.dataset.part === partType) {
+        // Doğru parça doğru yuvaya bırakıldı
+        targetSlot.classList.add('filled');
+        // Parçayı yuvaya görsel olarak yerleştir (orijinal elementi gizle)
+        draggablePart.classList.add('placed'); // Orijinal parçayı gizle
+
+        // Yeni bir element oluşturup slota ekleyebiliriz veya orijinali taşıyabiliriz.
+        // Orijinali taşımak, stilleri korumak açısından daha kolay olabilir.
+        const placedPart = draggablePart.cloneNode(true);
+        placedPart.id = `${partId}-placed`; // Placed id'si ile çakışmayı önle
+        placedPart.classList.remove('dragging', 'placed');
+        placedPart.draggable = false;
+        placedPart.style.width = '100%';
+        placedPart.style.height = '100%';
+        placedPart.style.position = 'relative'; // Flexbox içinde doğru hizalama için
+        placedPart.style.background = 'var(--ship-color)'; // Rengi doldur
+        placedPart.style.boxShadow = 'var(--ship-glow)'; // Glow ekle
+        
+        targetSlot.innerHTML = ''; // Eski ipucunu temizle
+        targetSlot.appendChild(placedPart);
+
+        correctPartsCount++;
+        if (correctPartsCount === totalParts) {
+            endGame(true);
+        }
+    } else {
+        // Yanlış parça bırakıldı
+        targetSlot.classList.add('shake');
+        setTimeout(() => targetSlot.classList.remove('shake'), 400);
+    }
+}
+
+
+function startGame() {
+    startModal.classList.remove('active');
+    endModal.classList.remove('active');
+    createShipGame();
+}
+
+function endGame(isWin) {
+    if (isWin) {
+        endScore.textContent = `Gemiyi ${moves} hamlede başarıyla monte ettin.`;
+        passwordSection.style.display = 'block';
+        passwordDisplay.textContent = PASSWORD_KEY;
+    }
+    endModal.classList.add('active');
+}
+
+function toggleFullscreen(){
+    if (!document.fullscreenElement){
+        document.documentElement.requestFullscreen().catch(err=>alert(`Tam ekran başlatılamadı: ${err.message}`));
+    } else if (document.exitFullscreen){
+        document.exitFullscreen();
+    }
+}
+
+function updateFullscreenIcon(){
+    const on = !!document.fullscreenElement;
+    iconExpand.style.display = on ? 'none':'block';
+    iconCompress.style.display = on ? 'block':'none';
+}
+
+uiFullscreenBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', updateFullscreenIcon);
+
+copyBtn.addEventListener('click', async ()=>{
+    const t = passwordDisplay.textContent.trim();
+    if (!t || t==='—') return;
+    try{ await navigator.clipboard.writeText(t); copyBtn.textContent='✅ Kopyalandı'; }
+    catch{ copyBtn.textContent='❌ Hata'; }
+    setTimeout(()=> copyBtn.textContent='Kopyala', 1500);
+});
+
+closeStartModalBtn.addEventListener('click', () => startModal.classList.remove('active'));
+closeEndModalBtn.addEventListener('click', () => endModal.classList.remove('active'));
+startModal.addEventListener('click', (e) => {
+    if (e.target === startModal) startModal.classList.remove('active');
+});
+endModal.addEventListener('click', (e) => {
+    if (e.target === endModal) endModal.classList.remove('active');
+});
+
+startBtn.addEventListener('click', startGame);
+startBtn2.addEventListener('click', startGame);
+
+</script>
+</body>
+</html>
